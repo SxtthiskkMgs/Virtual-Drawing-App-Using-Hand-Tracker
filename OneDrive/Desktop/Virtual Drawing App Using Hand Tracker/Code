@@ -1,0 +1,74 @@
+import cv2
+import mediapipe as mp
+import numpy as np
+
+# Initialize MediaPipe Hand and Drawing utilities
+mp_hands = mp.solutions.hands
+mp_drawing = mp.solutions.drawing_utils
+
+# Start capturing video from the webcam
+cap = cv2.VideoCapture(0)
+
+# Initialize a blank canvas for drawing
+canvas = None
+
+# Define drawing color and brush thickness
+color = (255, 0, 0)  # Blue
+brush_thickness = 5
+
+# Initialize hand detection
+with mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.5) as hands:
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        # Flip the frame for a more natural experience
+        frame = cv2.flip(frame, 1)
+        
+        # Initialize canvas if not yet created
+        if canvas is None:
+            canvas = np.zeros_like(frame)
+        
+        # Convert the image color from BGR to RGB (required by MediaPipe)
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_rgb.flags.writeable = False
+        
+        # Detect the hand and its landmarks
+        results = hands.process(frame_rgb)
+        
+        # Convert the image back to BGR for displaying
+        frame_rgb.flags.writeable = True
+        frame = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+        
+        # Check if any hand is detected
+        if results.multi_hand_landmarks:
+            for hand_landmarks in results.multi_hand_landmarks:
+                # Draw the hand landmarks and connections
+                mp_drawing.draw_landmarks(frame, hand_landmarks, mp_hands.HAND_CONNECTIONS)
+                
+                # Get landmark for the tip of the index finger (landmark 8)
+                index_finger_tip = hand_landmarks.landmark[8]
+                
+                # Convert the normalized coordinates to pixel values
+                h, w, _ = frame.shape
+                x = int(index_finger_tip.x * w)
+                y = int(index_finger_tip.y * h)
+                
+                # If the index finger is raised (relative to the middle finger), start drawing
+                if hand_landmarks.landmark[8].y < hand_landmarks.landmark[6].y:  # Index finger is raised
+                    cv2.circle(canvas, (x, y), brush_thickness, color, -1)
+                
+        # Merge the canvas and frame
+        frame = cv2.addWeighted(frame, 0.5, canvas, 0.5, 0)
+        
+        # Display the result
+        cv2.imshow('Virtual Drawing', frame)
+        
+        # Exit the loop if 'q' is pressed
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+# Release the video capture and close all windows
+cap.release()
+cv2.destroyAllWindows()
